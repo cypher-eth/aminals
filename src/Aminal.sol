@@ -45,9 +45,31 @@ contract Aminal is ERC721 {
     // Set up a mapping of VRGDAs per aminal
     // Each aminal has its own VRGDA curve, to represent its individual
     // level of attention
-    mapping (uint256 => LinearVRGDA) spawnVRGDA;
-    mapping (uint256 => LinearVRGDA) feedVRGDA;
-    mapping (uint256 => LinearVRGDA) goToVRGDA;
+    mapping(uint256 => LinearVRGDA) spawnVRGDA;
+    mapping(uint256 => LinearVRGDA) feedVRGDA;
+    mapping(uint256 => LinearVRGDA) goToVRGDA;
+
+    // TODO: Update these values to more thoughtful ones
+    // A spawn costs 0.01 ETH with a 10% price increase or decrease and an expected spawn rate of two per day
+    uint256 spawnTargetPrice = 0.01e18;
+    uint256 spawnPriceDecayPercent = 0.1e18;
+    uint256 spawnPerTimeUnit = 2e18;
+
+    // A feeding costs 0.001 ETH with a 5% price increase or decrease and an expected feed rate of 4 per hour, i.e. 4 * 24 = 96 over 24 hours
+    uint256 feedTargetPrice = 0.001e18;
+    uint256 feedPriceDecayPercent = 0.05e18;
+    uint256 feedPerTimeUnit = 96e18;
+
+    // A goto costs 0.001 ETH with a 10% price increase or decrease and an expected goto rate of 4 per hour, i.e. 4 * 24 = 96 over 24 hours
+    uint256 feedTargetPrice = 0.001e18;
+    uint256 feedPriceDecayPercent = 0.1e18;
+    uint256 feedPerTimeUnit = 96e18;
+
+    enum ActionTypes {
+        SPAWN,
+        FEED,
+        GO_TO
+    }
 
     constructor() ERC721("Aminal", "AMNL") {}
 
@@ -66,7 +88,9 @@ contract Aminal is ERC721 {
         returns (address aminalAddress)
     {
         aminalAddress = address(
-            uint160(uint256(keccak256(abi.encodePacked(address(this), aminalId))))
+            uint160(
+                uint256(keccak256(abi.encodePacked(address(this), aminalId)))
+            )
         );
     }
 
@@ -129,6 +153,49 @@ contract Aminal is ERC721 {
         // TODO how should affinity accumulate?
         affinity[aminalId][sender] += value;
         senderAffinity = affinity[aminalId][sender];
+    }
+
+    function checkVRGDAInitialized(uint256 aminalId, ActionTypes action) {
+        vrgda = getMappingForAction(action)[aminalId];
+
+        if (vrgda.perTimeUnit == 0) {
+            initializeVRGDA(aminalId, action);
+        }
+    }
+
+    function initializeVRGDA(LinearVRGDA vrgda, ActionTypes action) {
+        if (ActionTypes == ActionTypes.SPAWN) {
+            vrgda = new LinearVRGDA(
+                spawnTargetPrice,
+                spawnPriceDecayPercent,
+                spawnPerTimeUnit
+            );
+        } else if (ActionTypes == ActionTypes.FEED) {
+            vrgda = new LinearVRGDA(
+                feedTargetPrice,
+                feedPriceDecayPercent,
+                feedPerTimeUnit
+            );
+        } else if (ActionTypes == ActionTypes.GO_TO) {
+            vrgda = new LinearVRGDA(
+                goToTargetPrice,
+                goToPriceDecayPercent,
+                goToPerTimeUnit
+            );
+        }
+    }
+
+    function getMappingForAction(ActionTypes action)
+        internal
+        returns (mapping(uint256 => LinearVRGDA))
+    {
+        if (action == ActionTypes.SPAWN) {
+            return spawnVRGDA;
+        } else if (action == ActionTypes.FEED) {
+            return feedVRGDA;
+        } else if (action == ActionTypes.GO_TO) {
+            return goToVRGDA;
+        }
     }
 
     // Protect against someone mining the location key by disallowing any tranfser besides goto
