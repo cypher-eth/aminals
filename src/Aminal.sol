@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import "openzeppelin/token/ERC721/ERC721.sol";
+import "../lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import "../lib/VRGDAs/src/LinearVRGDA.sol";
 
 error AminalDoesNotExist();
