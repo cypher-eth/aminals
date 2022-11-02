@@ -11,8 +11,6 @@ error OnlyMoveWithGoTo();
 error MaxAminalsSpawned();
 
 contract Aminal is ERC721 {
-    constructor() ERC721("Aminal", "AMNL") {}
-
     uint160 constant MAX_LOCATION = 1e9;
 
     uint256 constant MAX_AMINALS = 1e4;
@@ -44,6 +42,14 @@ contract Aminal is ERC721 {
 
     mapping(uint256 => mapping(address => uint256)) public affinity;
     mapping(uint256 => uint256) public maxAffinity;
+    // Set up a mapping of VRGDAs per aminal
+    // Each aminal has its own VRGDA curve, to represent its individual
+    // level of attention
+    mapping (uint256 => LinearVRGDA) spawnVRGDA;
+    mapping (uint256 => LinearVRGDA) feedVRGDA;
+    mapping (uint256 => LinearVRGDA) goToVRGDA;
+
+    constructor() ERC721("Aminal", "AMNL") {}
 
     function locationOf(uint256 aminalId)
         public
