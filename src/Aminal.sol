@@ -5,6 +5,7 @@ import "../lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import "../lib/VRGDAs/src/LinearVRGDA.sol";
 
 error AminalDoesNotExist();
+error PriceTooLow();
 error SenderDoesNotHaveMaxAffinity();
 error ExceedsMaxLocation();
 error OnlyMoveWithGoTo();
@@ -42,10 +43,13 @@ contract Aminal is ERC721 {
 
     mapping(uint256 => mapping(address => uint256)) public affinity;
     mapping(uint256 => uint256) public maxAffinity;
+    // Spawning aminals has a global curve, while every other VRGDA is a local
+    // curve. This is because we don't have per-aminal spawns. Breeding aminals,
+    // for example, would have a local curve.
+    LinearVRGDA spawnVRGDA;
     // Set up a mapping of VRGDAs per aminal
     // Each aminal has its own VRGDA curve, to represent its individual
     // level of attention
-    mapping(uint256 => LinearVRGDA) spawnVRGDA;
     mapping(uint256 => LinearVRGDA) feedVRGDA;
     mapping(uint256 => LinearVRGDA) goToVRGDA;
 
@@ -95,8 +99,13 @@ contract Aminal is ERC721 {
     }
 
     function spawn() public payable {
-        // TODO require nonzero value?
         if (currentAminalId == MAX_AMINALS) revert MaxAminalsSpawned();
+        // TODO: Refactor this to overload the checkVRGDAInitialized function to
+        // only require an action for spawn
+        checkVRGDAInitialized(currentAminalId, spawn);
+        uint256 price = spawnVRGDA.getVRGDAPrice(currentAminalId);
+        bool excessPrice = checkExcessPrice(price);
+
         currentAminalId++;
         uint256 senderAffinity = updateAffinity(
             currentAminalId,
@@ -111,6 +120,10 @@ contract Aminal is ERC721 {
         );
         address location = address(uint160(pseudorandomness % MAX_LOCATION));
         _mint(location, currentAminalId);
+
+        if (excessPrice) {
+            refundExcessPrice(price);
+        }
 
         emit AminalSpawned(
             msg.sender,
@@ -156,7 +169,11 @@ contract Aminal is ERC721 {
     }
 
     function checkVRGDAInitialized(uint256 aminalId, ActionTypes action) {
-        vrgda = getMappingForAction(action)[aminalId];
+        if (action != ActionTypes.SPAWN) {
+            vrgda = getMappingForAction(action)[aminalId];
+        } else {
+            vrgda = spawnVRGDA;
+        }
 
         if (vrgda.perTimeUnit == 0) {
             initializeVRGDA(aminalId, action);
@@ -197,6 +214,25 @@ contract Aminal is ERC721 {
             return goToVRGDA;
         }
     }
+
+    // This takes care of users who have sent too much ETH between seeing a
+    // transaction and confirming a transaction.
+    // Returns true if there is excess, false if the price is exact, and reverts
+    // if the price is too low We cannot refund here because refunding here
+    // would open up a re-entrancy attack. We need to refund at the end of the
+    // function.
+    function checkExcessPrice(uint256 price) {
+        if (msg.value > price) {
+            msg.sender.transfer(msg.value - price);
+            return true;
+        } else if (msg.value < price) {
+            revert PriceTooLow();
+        } else {
+            return false;
+        }
+    }
+
+    function refundExcessPrice(uint256 price) {}
 
     // Protect against someone mining the location key by disallowing any tranfser besides goto
     function _beforeTokenTransfer(
