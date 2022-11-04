@@ -56,6 +56,10 @@ contract Aminal is ERC721 {
     mapping(uint256 => LinearVRGDA) feedVRGDA;
     mapping(uint256 => LinearVRGDA) goToVRGDA;
 
+    // TODO: Update this with the timestamp of deployment. This will save gas by
+    // maintaing it as a constant instead of setting it in the constructor.
+    int256 constant TIME_SINCE_START = 0;
+
     // TODO: Update these values to more thoughtful ones
     // A spawn costs 0.01 ETH with a 10% price increase or decrease and an expected spawn rate of two per day
     uint256 spawnTargetPrice = 0.01e18;
@@ -68,9 +72,9 @@ contract Aminal is ERC721 {
     uint256 feedPerTimeUnit = 96e18;
 
     // A goto costs 0.001 ETH with a 10% price increase or decrease and an expected goto rate of 4 per hour, i.e. 4 * 24 = 96 over 24 hours
-    uint256 feedTargetPrice = 0.001e18;
-    uint256 feedPriceDecayPercent = 0.1e18;
-    uint256 feedPerTimeUnit = 96e18;
+    uint256 goToTargetPrice = 0.001e18;
+    uint256 goToPriceDecayPercent = 0.1e18;
+    uint256 goToPerTimeUnit = 96e18;
 
     enum ActionTypes {
         SPAWN,
@@ -105,8 +109,11 @@ contract Aminal is ERC721 {
         if (currentAminalId == MAX_AMINALS) revert MaxAminalsSpawned();
         // TODO: Refactor this to overload the checkVRGDAInitialized function to
         // only require an action for spawn
-        checkVRGDAInitialized(currentAminalId, spawn);
-        uint256 price = spawnVRGDA.getVRGDAPrice(currentAminalId);
+        checkVRGDAInitialized(currentAminalId, ActionTypes.SPAWN);
+        uint256 price = spawnVRGDA.getVRGDAPrice(
+            TIME_SINCE_START,
+            currentAminalId
+        );
         bool excessPrice = checkExcessPrice(price);
 
         currentAminalId++;
@@ -174,18 +181,22 @@ contract Aminal is ERC721 {
     function checkVRGDAInitialized(uint256 aminalId, ActionTypes action)
         internal
     {
+        LinearVRGDA vrgda;
+
         if (action != ActionTypes.SPAWN) {
-            vrgda = getMappingForAction(action)[aminalId];
+            vrgda = getMappingForNonSpawnAction(action)[aminalId];
         } else {
             vrgda = spawnVRGDA;
         }
 
-        if (vrgda.perTimeUnit == 0) {
+        //
+        if (vrgda.targetPrice == int256(0)) {
             initializeVRGDA(aminalId, action);
         }
     }
 
-    function initializeVRGDA(LinearVRGDA vrgda, ActionTypes action) internal {
+    function initializeVRGDA(uint256 aminalId, ActionTypes action) internal {
+        LinearVRGDA vrgda;
         if (ActionTypes == ActionTypes.SPAWN) {
             vrgda = new LinearVRGDA(
                 spawnTargetPrice,
@@ -207,13 +218,11 @@ contract Aminal is ERC721 {
         }
     }
 
-    function getMappingForAction(ActionTypes action)
+    function getMappingForNonSpawnAction(ActionTypes action)
         internal
-        returns (mapping(uint256 => LinearVRGDA))
+        returns (mapping(uint256 => LinearVRGDA) storage)
     {
-        if (action == ActionTypes.SPAWN) {
-            return spawnVRGDA;
-        } else if (action == ActionTypes.FEED) {
+        if (action == ActionTypes.FEED) {
             return feedVRGDA;
         } else if (action == ActionTypes.GO_TO) {
             return goToVRGDA;
@@ -228,7 +237,6 @@ contract Aminal is ERC721 {
     // function.
     function checkExcessPrice(uint256 price) internal returns (bool) {
         if (msg.value > price) {
-            msg.sender.transfer(msg.value - price);
             return true;
         } else if (msg.value < price) {
             revert PriceTooLow();
@@ -242,11 +250,12 @@ contract Aminal is ERC721 {
     }
 
     // Protect against someone mining the location key by disallowing any tranfser besides goto
+    // TODO: Fix override. The current override does not compile
     function _beforeTokenTransfer(
         address,
         address,
         uint256
-    ) internal view override(ERC721) {
+    ) internal view {
         if (!going) revert OnlyMoveWithGoTo();
     }
 }
