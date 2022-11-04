@@ -3,6 +3,9 @@ pragma solidity ^0.8.17;
 
 import "../lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import "../lib/VRGDAs/src/LinearVRGDA.sol";
+// Use SafeTransferLib from Solmate V7, which is identical to the
+// SafeTransferLib from Solmate V6 besides the MIT license
+import "../lib/solmate/src/utils/SafeTransferLib.sol";
 
 error AminalDoesNotExist();
 error PriceTooLow();
@@ -168,7 +171,9 @@ contract Aminal is ERC721 {
         senderAffinity = affinity[aminalId][sender];
     }
 
-    function checkVRGDAInitialized(uint256 aminalId, ActionTypes action) {
+    function checkVRGDAInitialized(uint256 aminalId, ActionTypes action)
+        internal
+    {
         if (action != ActionTypes.SPAWN) {
             vrgda = getMappingForAction(action)[aminalId];
         } else {
@@ -180,7 +185,7 @@ contract Aminal is ERC721 {
         }
     }
 
-    function initializeVRGDA(LinearVRGDA vrgda, ActionTypes action) {
+    function initializeVRGDA(LinearVRGDA vrgda, ActionTypes action) internal {
         if (ActionTypes == ActionTypes.SPAWN) {
             vrgda = new LinearVRGDA(
                 spawnTargetPrice,
@@ -221,7 +226,7 @@ contract Aminal is ERC721 {
     // if the price is too low We cannot refund here because refunding here
     // would open up a re-entrancy attack. We need to refund at the end of the
     // function.
-    function checkExcessPrice(uint256 price) {
+    function checkExcessPrice(uint256 price) internal returns (bool) {
         if (msg.value > price) {
             msg.sender.transfer(msg.value - price);
             return true;
@@ -232,7 +237,9 @@ contract Aminal is ERC721 {
         }
     }
 
-    function refundExcessPrice(uint256 price) {}
+    function refundExcessPrice(uint256 price) internal {
+        SafeTransferLib.safeTransferETH(msg.sender, msg.value - price);
+    }
 
     // Protect against someone mining the location key by disallowing any tranfser besides goto
     function _beforeTokenTransfer(
