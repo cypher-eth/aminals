@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 import "../lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
-import "../lib/VRGDAs/src/LinearVRGDA.sol";
+import "./AminalVRGDA.sol";
 // Use SafeTransferLib from Solmate V7, which is identical to the
 // SafeTransferLib from Solmate V6 besides the MIT license
 import "../lib/solmate/src/utils/SafeTransferLib.sol";
@@ -49,12 +49,12 @@ contract Aminal is ERC721 {
     // Spawning aminals has a global curve, while every other VRGDA is a local
     // curve. This is because we don't have per-aminal spawns. Breeding aminals,
     // for example, would have a local curve.
-    LinearVRGDA spawnVRGDA;
+    AminalVRGDA spawnVRGDA;
     // Set up a mapping of VRGDAs per aminal
     // Each aminal has its own VRGDA curve, to represent its individual
     // level of attention
-    mapping(uint256 => LinearVRGDA) feedVRGDA;
-    mapping(uint256 => LinearVRGDA) goToVRGDA;
+    mapping(uint256 => AminalVRGDA) feedVRGDA;
+    mapping(uint256 => AminalVRGDA) goToVRGDA;
 
     // TODO: Update this with the timestamp of deployment. This will save gas by
     // maintaing it as a constant instead of setting it in the constructor.
@@ -62,19 +62,19 @@ contract Aminal is ERC721 {
 
     // TODO: Update these values to more thoughtful ones
     // A spawn costs 0.01 ETH with a 10% price increase or decrease and an expected spawn rate of two per day
-    uint256 spawnTargetPrice = 0.01e18;
-    uint256 spawnPriceDecayPercent = 0.1e18;
-    uint256 spawnPerTimeUnit = 2e18;
+    int256 spawnTargetPrice = 0.01e18;
+    int256 spawnPriceDecayPercent = 0.1e18;
+    int256 spawnPerTimeUnit = 2e18;
 
     // A feeding costs 0.001 ETH with a 5% price increase or decrease and an expected feed rate of 4 per hour, i.e. 4 * 24 = 96 over 24 hours
-    uint256 feedTargetPrice = 0.001e18;
-    uint256 feedPriceDecayPercent = 0.05e18;
-    uint256 feedPerTimeUnit = 96e18;
+    int256 feedTargetPrice = 0.001e18;
+    int256 feedPriceDecayPercent = 0.05e18;
+    int256 feedPerTimeUnit = 96e18;
 
     // A goto costs 0.001 ETH with a 10% price increase or decrease and an expected goto rate of 4 per hour, i.e. 4 * 24 = 96 over 24 hours
-    uint256 goToTargetPrice = 0.001e18;
-    uint256 goToPriceDecayPercent = 0.1e18;
-    uint256 goToPerTimeUnit = 96e18;
+    int256 goToTargetPrice = 0.001e18;
+    int256 goToPriceDecayPercent = 0.1e18;
+    int256 goToPerTimeUnit = 96e18;
 
     enum ActionTypes {
         SPAWN,
@@ -82,7 +82,13 @@ contract Aminal is ERC721 {
         GO_TO
     }
 
-    constructor() ERC721("Aminal", "AMNL") {}
+    constructor() ERC721("Aminal", "AMNL") {
+        spawnVRGDA = new AminalVRGDA(
+            spawnTargetPrice,
+            spawnPriceDecayPercent,
+            spawnPerTimeUnit
+        );
+    }
 
     function locationOf(uint256 aminalId)
         public
@@ -181,36 +187,35 @@ contract Aminal is ERC721 {
     function checkVRGDAInitialized(uint256 aminalId, ActionTypes action)
         internal
     {
-        LinearVRGDA vrgda;
+        AminalVRGDA vrgda;
 
         if (action != ActionTypes.SPAWN) {
-            vrgda = getMappingForNonSpawnAction(action)[aminalId];
+            vrgda = getVRGDAForNonSpawnAction(action, aminalId);
         } else {
             vrgda = spawnVRGDA;
         }
 
-        //
-        if (vrgda.targetPrice == int256(0)) {
+        if (!vrgda.isInitialized()) {
             initializeVRGDA(aminalId, action);
         }
     }
 
     function initializeVRGDA(uint256 aminalId, ActionTypes action) internal {
-        LinearVRGDA vrgda;
-        if (ActionTypes == ActionTypes.SPAWN) {
-            vrgda = new LinearVRGDA(
+        AminalVRGDA vrgda;
+        if (action == ActionTypes.SPAWN) {
+            vrgda = new AminalVRGDA(
                 spawnTargetPrice,
                 spawnPriceDecayPercent,
                 spawnPerTimeUnit
             );
-        } else if (ActionTypes == ActionTypes.FEED) {
-            vrgda = new LinearVRGDA(
+        } else if (action == ActionTypes.FEED) {
+            vrgda = new AminalVRGDA(
                 feedTargetPrice,
                 feedPriceDecayPercent,
                 feedPerTimeUnit
             );
-        } else if (ActionTypes == ActionTypes.GO_TO) {
-            vrgda = new LinearVRGDA(
+        } else if (action == ActionTypes.GO_TO) {
+            vrgda = new AminalVRGDA(
                 goToTargetPrice,
                 goToPriceDecayPercent,
                 goToPerTimeUnit
@@ -218,14 +223,14 @@ contract Aminal is ERC721 {
         }
     }
 
-    function getMappingForNonSpawnAction(ActionTypes action)
+    function getVRGDAForNonSpawnAction(ActionTypes action, uint256 aminalId)
         internal
-        returns (mapping(uint256 => LinearVRGDA) storage)
+        returns (AminalVRGDA)
     {
         if (action == ActionTypes.FEED) {
-            return feedVRGDA;
+            return feedVRGDA[aminalId];
         } else if (action == ActionTypes.GO_TO) {
-            return goToVRGDA;
+            return goToVRGDA[aminalId];
         }
     }
 
