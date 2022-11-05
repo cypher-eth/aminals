@@ -14,6 +14,10 @@ error ExceedsMaxLocation();
 error OnlyMoveWithGoTo();
 error MaxAminalsSpawned();
 
+// TODO: Refactor Aminals to structs
+// TODO: Add getters for prices for each action
+// TODO: Add hunger
+// TODO: Add poop
 contract Aminal is ERC721 {
     uint160 constant MAX_LOCATION = 1e9;
 
@@ -114,7 +118,7 @@ contract Aminal is ERC721 {
     function spawn() public payable {
         if (currentAminalId == MAX_AMINALS) revert MaxAminalsSpawned();
         // TODO: Refactor this to overload the checkVRGDAInitialized function to
-        // only require an action for spawn
+        // only require an action for spawn (no aminalId needed)
         checkVRGDAInitialized(currentAminalId, ActionTypes.SPAWN);
         uint256 price = spawnVRGDA.getVRGDAPrice(
             TIME_SINCE_START,
@@ -150,6 +154,14 @@ contract Aminal is ERC721 {
     }
 
     function feed(uint256 aminalId) public payable {
+        checkVRGDAInitialized(aminalId, ActionTypes.FEED);
+        uint256 price = spawnVRGDA.getVRGDAPrice(
+            TIME_SINCE_START,
+            // TODO: Refactor this to use the total food (requires the struct refactor)
+            currentAminalId
+        );
+        bool excessPrice = checkExcessPrice(price);
+
         uint256 senderAffinity = updateAffinity(
             aminalId,
             msg.sender,
@@ -160,6 +172,10 @@ contract Aminal is ERC721 {
         if (senderAffinity > maxAffinity[aminalId]) {
             maxAffinity[aminalId] = senderAffinity;
             newMax = true;
+        }
+
+        if (excessPrice) {
+            refundExcessPrice(price);
         }
 
         emit AminalFed(msg.sender, aminalId, msg.value, senderAffinity, newMax);
