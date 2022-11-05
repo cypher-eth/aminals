@@ -18,6 +18,8 @@ error MaxAminalsSpawned();
 // TODO: Add getters for prices for each action
 // TODO: Add hunger
 // TODO: Add poop
+// TODO: Add function that lets us modify metadata for unissued NFTs (and not
+// for issued ones)
 contract Aminal is ERC721 {
     uint160 constant MAX_LOCATION = 1e9;
 
