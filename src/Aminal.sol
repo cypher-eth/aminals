@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import "../lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
+import "openzeppelin/token/ERC721/ERC721.sol";
+import "@core/interfaces/IAminal.sol";
+import "@core/interfaces/IAminalCoordinates.sol";
+
 import "./AminalVRGDA.sol";
-// Use SafeTransferLib from Solmate V7, which is identical to the
-// SafeTransferLib from Solmate V6 besides the MIT license
+
 import "../lib/solmate/src/utils/SafeTransferLib.sol";
 
 error AminalDoesNotExist();
@@ -20,35 +22,24 @@ error MaxAminalsSpawned();
 // TODO: Add poop
 // TODO: Add function that lets us modify metadata for unissued NFTs (and not
 // for issued ones)
-contract Aminal is ERC721 {
+contract Aminal is ERC721, IAminal {
+    // Use SafeTransferLib from Solmate V7, which is identical to the
+    // SafeTransferLib from Solmate V6 besides the MIT license
     uint160 constant MAX_LOCATION = 1e9;
 
     uint256 constant MAX_AMINALS = 1e4;
 
     uint256 currentAminalId;
 
-    bool going;
+    bool private going;
+
+    IAminalCoordinates public coordinates;
 
     modifier goingTo() {
         going = true;
         _;
         going = false;
     }
-
-    event AminalSpawned(
-        address spawner,
-        uint256 aminalId,
-        uint256 value,
-        uint256 affinity
-    );
-
-    event AminalFed(
-        address feeder,
-        uint256 aminalId,
-        uint256 value,
-        uint256 newAffinity,
-        bool newMax
-    );
 
     mapping(uint256 => mapping(address => uint256)) public affinity;
     mapping(uint256 => uint256) public maxAffinity;
@@ -88,21 +79,13 @@ contract Aminal is ERC721 {
         GO_TO
     }
 
-    constructor() ERC721("Aminal", "AMNL") {
+    constructor(address _coordinatesMap) ERC721("Aminal", "AMNL") {
+        coordinates = IAminalCoordinates(_coordinatesMap);
         spawnVRGDA = new AminalVRGDA(
             spawnTargetPrice,
             spawnPriceDecayPercent,
             spawnPerTimeUnit
         );
-    }
-
-    function locationOf(uint256 aminalId)
-        public
-        view
-        returns (uint160 location)
-    {
-        if (!_exists(aminalId)) revert AminalDoesNotExist();
-        return uint160(ownerOf(aminalId));
     }
 
     function addressOf(uint256 aminalId)
@@ -115,6 +98,10 @@ contract Aminal is ERC721 {
                 uint256(keccak256(abi.encodePacked(address(this), aminalId)))
             )
         );
+    }
+
+    function exists(uint256 aminalId) public view returns (bool) {
+        return _exists(aminalId);
     }
 
     function spawn() public payable {
@@ -140,7 +127,9 @@ contract Aminal is ERC721 {
                 abi.encodePacked(blockhash(block.number - 1), currentAminalId)
             )
         );
-        address location = address(uint160(pseudorandomness % MAX_LOCATION));
+        address location = address(
+            uint160(pseudorandomness % coordinates.maxLocation())
+        );
         _mint(location, currentAminalId);
 
         if (excessPrice) {
@@ -187,7 +176,7 @@ contract Aminal is ERC721 {
         if (!_exists(aminalId)) revert AminalDoesNotExist();
         if (affinity[aminalId][msg.sender] != maxAffinity[aminalId])
             revert SenderDoesNotHaveMaxAffinity();
-        if (location > MAX_LOCATION) revert ExceedsMaxLocation();
+        if (location > coordinates.maxLocation()) revert ExceedsMaxLocation();
 
         _transfer(ownerOf(aminalId), address(location), aminalId);
     }
