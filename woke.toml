@@ -1,0 +1,39 @@
+[compiler.solc]
+ignore_paths = ["node_modules", ".woke-build", "venv", "lib"]
+include_paths = ["node_modules"]
+via_IR = true
+remappings = [
+  "@core/=./src/",
+  "@modules/=./src/modules/",
+  "VRGDAs/=lib/VRGDAs/src/",
+  "ds-test/=lib/VRGDAs/lib/ds-test/src/",
+  "forge-std/=lib/forge-std/src/",
+  "openzeppelin-contracts/=lib/openzeppelin-contracts/",
+  "openzeppelin/=./lib/openzeppelin-contracts/contracts/",
+  "solady/=./lib/solady/src/",
+  "solmate-v6/=lib/solmate-v6/src/",
+  "solmate/=lib/solmate-v6/src/"
+]
+
+[detectors]
+exclude = []
+ignore_paths = ["node_modules", ".woke-build", "venv", "lib"]
+
+[testing]
+cmd = "anvil"
+
+[testing.anvil]
+cmd_args = "--prune-history 100 --transaction-block-keeper 10 --steps-tracing --silent"
+
+[testing.ganache]
+cmd_args = "-k istanbul -q"
+
+[testing.hardhat]
+cmd_args = ""
+
+[compiler.solc.optimizer]
+enabled = true
+runs = 200
+
+
+

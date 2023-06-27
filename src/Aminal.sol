@@ -7,6 +7,7 @@ import "@core/interfaces/IAminalCoordinates.sol";
 
 import "./AminalVRGDA.sol";
 
+import "./descriptors/AminalDescriptor.sol";
 import "../lib/solmate/src/utils/SafeTransferLib.sol";
 
 error AminalDoesNotExist();
@@ -22,7 +23,7 @@ error MaxAminalsSpawned();
 // TODO: Add poop
 // TODO: Add function that lets us modify metadata for unissued NFTs (and not
 // for issued ones)
-contract Aminal is ERC721, IAminal {
+contract Aminal is ERC721, IAminal, AminalDescriptor {
     // Use SafeTransferLib from Solmate V7, which is identical to the
     // SafeTransferLib from Solmate V6 besides the MIT license
     uint160 constant MAX_LOCATION = 1e9;
@@ -103,6 +104,10 @@ contract Aminal is ERC721, IAminal {
     function exists(uint256 aminalId) public view returns (bool) {
         return _exists(aminalId);
     }
+
+    // ------------------------------------------------------------------------
+    // Actions
+    // ------------------------------------------------------------------------
 
     function spawn() public payable {
         if (currentAminalId == MAX_AMINALS) revert MaxAminalsSpawned();
@@ -191,6 +196,19 @@ contract Aminal is ERC721, IAminal {
         senderAffinity = affinity[aminalId][sender];
     }
 
+
+    // ------------------------------------------------------------------------
+    // NFT Descriptors
+    // ------------------------------------------------------------------------
+
+    function tokenURI(uint256 aminalId) public view override returns (string memory) {
+        return dataURI(aminalId);
+    }
+
+    // ------------------------------------------------------------------------
+    // VRGDA
+    // ------------------------------------------------------------------------
+
     function checkVRGDAInitialized(uint256 aminalId, ActionTypes action)
         internal
     {
@@ -207,7 +225,7 @@ contract Aminal is ERC721, IAminal {
         }
     }
 
-    function initializeVRGDA(uint256 aminalId, ActionTypes action) internal {
+    function initializeVRGDA(uint256 /*aminalId*/, ActionTypes action) internal {
         AminalVRGDA vrgda;
         if (action == ActionTypes.SPAWN) {
             vrgda = new AminalVRGDA(
@@ -231,8 +249,8 @@ contract Aminal is ERC721, IAminal {
     }
 
     function getVRGDAForNonSpawnAction(ActionTypes action, uint256 aminalId)
-        internal
-        returns (AminalVRGDA)
+        internal view
+        returns (AminalVRGDA returnVRDGA)
     {
         if (action == ActionTypes.FEED) {
             return feedVRGDA[aminalId];
